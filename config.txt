@@ -1,0 +1,49 @@
+//This settings file is used to change fundamental parameters used in the Flow proportional sampler routing
+//It tolerates comments and whitespace.
+//HOWEVER: the variable names cannot be changed here unless they are also changed in the program itself
+//		   similarly, variables that are not mentioned or used in the main program will not be used
+//		   when this file is read in, it will match internal variables with the ones in this file, if it cannot match
+//		   based on misspellings etc, the variable will remain undefined. This will be bad.
+		
+//name for site that will be written in log file keep it under 10 char or problems ensue (
+siteID = CLRMID    
+//time to run pump in order to purge lines
+PumpTime = 45
+//FPSOperation 0 or 1 to activate or not activate the fps collection system (1=active)
+FPSOperation= 0;
+//time to rum pump to fill manta vessel and / or scan cuvette
+PumpToProbe = 5
+//time to run pump to empty all vessels
+PurgeTime = 45
+//time between SCAN cleaning signal and sample read
+scanCleaningTime = 65
+//amount of time to accommodate wander of Manta clock relative to scan clock
+mantaDelayTime = 60
+//some other fudge factor that is added to the Manta delay time to make sure all measurements are accomplished while the sample is in the system
+//measurementTime = 5
+//time to purge the system when only the FPS is required (no scan/manta) by flow monitoring
+//FPSPurgeTime = 10
+//time to purge the system when only the FPS is required (no scan/manta) by flow monitoring
+//FPSPurgeTime = 10 
+//same as mantaDelayTime
+//delayTime = 10
+//duration to pump for a sample for the FPS 
+FPSCollectTime = 5
+//duration to keep drain open for FPS collection
+FPSDrainTime = 15
+//time to wait for excess water to drain from FPS metering vessel
+FPSEquilibrateTime = 10
+//Fresh water rinse from windshield washer pump (in seconds)
+FreshWaterRinseTime = 4
+////time to pump to fill cuvette with acid
+AcidPumpTime = 2 
+//Sample interval for executing Sontek measurement cycle in minutes. 
+sontekInterval = 1                
+//sample interval (used when scan isn't running to execute the main sample cycle)
+SI = 15                    
+//Time threshold (minutes) for which an Flow Proportional water sample is automatically triggered (independent of flow)
+TimeThreshold = 1440  
+//Flux threshold for taking an FP Sample--either in a single timestep or over multiple timesteps
+QThreshold = 100; 
+//Temperature at which to shut down system
+TempThreshold = 2;
