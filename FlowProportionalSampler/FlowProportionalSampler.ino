@@ -64,9 +64,12 @@
 //having problems with Sontek data.
 
 //3-5-2014 added FPSTest and FPSTestSamples to variables read from SD card
+//added A0 as groundable signal to start a sample routine
+//modified Q bookkeeping to carry over flow greater than the QThreshold into the next sample interval
+//moved some round statements in the FPS collection section
+//
 
-    
-const float VersionNumber=0.2; //update version (probably good to add date too)
+const float VersionNumber=0.3; //update version (probably good to add date too)
 
 
 ///Declare a MODBUS object name(address, serial port)
@@ -196,17 +199,17 @@ const int floatSwitch   = A12;     //detect full FPS tank(digital read)
 const int TestCycle = A0;       //an input variable for runniung a test cycle
 
 ///OUTPUT VARIABLES
-const int systemPump  = 32;        //pump to instrument     large peristaltic pump
-const int systemPurge = 30;        //pump in reverse 	  	large peristaltic pump
+const int systemPump  = 27;        //pump to instrument     large peristaltic pump
+const int systemPurge = 28;        //pump in reverse 	  	large peristaltic pump
 const int acidPump    = 34;        //pump forward  			small peristaltic pump
 const int acidPurge   = 36;        //pump reverse           small peristaltic pump
 								   //valves are all 12vDC gravity valves
-const int WaterQualityValve     = 22;  //connect main pump to sample system            
+const int WaterQualityValve     = 23;  //connect main pump to sample system            
 const int FPSCollectValve 	= 24;  //connects main pump to FPS metering vessel    
-const int FPSCollectDrainValve  = 26;//drains FPS into collection tank             
-const int ScanDrain             = 28;        //valve under ScanProbe
-const int CleanWaterRinseValve  = 6;// valve that allows windshield washer pump to run
-const int CleanWaterRinsePump   = 7;  //windshield washer pump that cleans scan lenses
+const int FPSCollectDrainValve  = 25;//drains FPS into collection tank             
+const int ScanDrain             = 22;        //valve under ScanProbe
+const int CleanWaterRinseValve  = 26;// valve that allows windshield washer pump to run
+const int CleanWaterRinsePump   = 29;  //windshield washer pump that cleans scan lenses
 
 
 //DECISION VARIABLES READ FROM SONTEK AND USED TO KEEP TRACK OF FLOW AND FPS SAMPLING
@@ -325,14 +328,16 @@ struct waterQual
 //change this section for 16 Relay board--low signal trips the relays
 //write everything HIGH
     digitalWrite(floatSwitch,HIGH);
-    digitalWrite(systemPump,LOW);
-    digitalWrite(systemPurge,LOW);
-    digitalWrite(WaterQualityValve,LOW);
-    digitalWrite(FPSCollectValve,LOW);
-    digitalWrite(FPSCollectDrainValve,LOW);
-    digitalWrite(ScanDrain,LOW);
-    digitalWrite(acidPump,LOW);
-    digitalWrite(acidPurge,LOW);
+    digitalWrite(systemPump,HIGH);
+    digitalWrite(systemPurge,HIGH);
+    digitalWrite(WaterQualityValve,HIGH);
+    digitalWrite(FPSCollectValve,HIGH);
+    digitalWrite(FPSCollectDrainValve,HIGH);
+    digitalWrite(ScanDrain,HIGH);
+    digitalWrite(acidPump,HIGH);
+    digitalWrite(acidPurge,HIGH);
+    digitalWrite(CleanWaterRinseValve,HIGH);
+    digitalWrite(CleanWaterRinsePump,HIGH);
 	//  digitalWrite(FPSpump,LOW);
 	//  digitalWrite(FPSpump,LOW);
       
@@ -396,15 +401,16 @@ void loop(){
 //(SI IS IN MINUTES, SO CONVERT TO SECONDS BEFORE MAKING THE COMPARISON)
 
    //when run by the scan probe, lets not, trigger sampling by the RTC
- //if (get_unixtime()%(SI*60)==0){sample=1;}   //EVERY SAMPLE INTERVAL GET READY TO RUN
                                                //THIS MIGHT INTERFERE IF SCAN WANDERS...                                                          
     if (get_unixtime()%(60)==0){           //EVERY ONCE IN A WHILE REPORT STATUS
+    
+                // if (get_unixtime()%(SI*60)==0){sample=1;}   //EVERY SAMPLE INTERVAL GET READY TO RUN
                  timeStamp(); 
                  readSensors(sensorValues);  
                  Serial.print("approximate time to next sample: ");
                  Serial.println(SI-get_unixtime()%(SI*60)/60);//TIME TO NEXT SAMPLE
-                 //pollSontek();
-                 delay(1000); //wait so the report is only given once
+               //  pollSontek();
+                 delay(900); //wait so the report is only given once
                }//end get_unixtime()%(60)==0)
 			   
 ///IF SAMPLE SIGNAL IS GIVEN BY PROBE OR BY RTC TENTATIVELY ENTER THE SAMPLE CYCLE
@@ -431,10 +437,10 @@ if (digitalRead(probeSignal)|| !digitalRead(TestCycle) || sample){
             timeStamp();                       //PRINT TIME FOR SERIAL FEEDBACK
 //**added this bit to have the scan drain open during purge, then closed during pump to probe
             Serial.println("purge lines");
-            digitalWrite(ScanDrain,HIGH); //delay (200);
+            digitalWrite(ScanDrain,LOW); //delay (200);
             pump(systemPump,PumpTime,WaterQualityValve);//PUMP TO PROBE
             Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
-            digitalWrite(ScanDrain,LOW);
+            digitalWrite(ScanDrain,HIGH);
             Serial.println("pump to probe");
             pump(systemPump,PumpToProbe,WaterQualityValve);
             Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
@@ -449,9 +455,9 @@ if (digitalRead(probeSignal)|| !digitalRead(TestCycle) || sample){
          
  //DRAIN the SCAN VESSEL
              Serial.println("Drain Scan");
-             digitalWrite(ScanDrain,HIGH);
-             delay(3000);
              digitalWrite(ScanDrain,LOW);
+             delay(3000);
+             digitalWrite(ScanDrain,HIGH);
              Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
          
 //WAIT FOR MANTA TO MEASURE'
@@ -476,7 +482,10 @@ if (digitalRead(probeSignal)|| !digitalRead(TestCycle) || sample){
           }  
 ///IF NECESSARY, EXECUTE FLOW PROPORTIONAL SAMPLE ROUTINE
 if (FPSOperation){//turn off FPS operation if we want to 
-			if(numberOfSamples){
+                        int Danger=digitalRead(floatSwitch);
+                        Serial.println("float Switch");
+                        Serial.println(Danger);
+			if(numberOfSamples && Danger){
 					collect = collectFlowProportionalSample(numberOfSamples);
 				}//END if(numberOfSamples){
 			else {
@@ -489,35 +498,35 @@ if (FPSOperation){//turn off FPS operation if we want to
   Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
          
 ///ALL DONE COLLECTING DATA AND WATER:  PURGE SYSTEM
-             digitalWrite(ScanDrain,HIGH);				//VALVE UNDER SCAN
-            // digitalWrite(FPSCollectValve,HIGH);        //VALVE TO FPS METERING
-             digitalWrite(WaterQualityValve,HIGH);		//VALVE TO MANTA AND SCAN
-             digitalWrite(FPSCollectDrainValve,HIGH);   //VALVE TO FPS COLLECTION
+             digitalWrite(ScanDrain,LOW);				//VALVE UNDER SCAN
+          //   digitalWrite(FPSCollectValve,LOW);        //VALVE TO FPS METERING
+             digitalWrite(WaterQualityValve,LOW);		//VALVE TO MANTA AND SCAN
+            // digitalWrite(FPSCollectDrainValve,LOW);   //VALVE TO FPS COLLECTION
 				delay(200);
              pump(systemPurge,PurgeTime,WaterQualityValve); //RUN THE PUMP
 				delay(200);
 		//	 digitalWrite(FPSCollectValve,LOW);         //VALVE TO FPS METERING 
-             digitalWrite(FPSCollectDrainValve,LOW);    //VALVE TO FPS COLLECTION
-			 digitalWrite(ScanDrain,LOW);				//VALVE BENEATH MANTA
-			 digitalWrite(WaterQualityValve,LOW);		//VALVE TO SCAN AND MANTA
- //digitalWrite(FPSCollectValve,HIGH);
+                //       digitalWrite(FPSCollectDrainValve,HIGH);    //VALVE TO FPS COLLECTION
+			 digitalWrite(ScanDrain,HIGH);				//VALVE BENEATH MANTA
+			 digitalWrite(WaterQualityValve,HIGH);		//VALVE TO SCAN AND MANTA
+                 //        digitalWrite(FPSCollectValve,HIGH);
  ///clean the lenses with a burst of water
  Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
  Serial.println("wash lenses");        
    //elay(1000);
-   digitalWrite(ScanDrain,HIGH);
-   digitalWrite(CleanWaterRinseValve,HIGH);
+   digitalWrite(ScanDrain,LOW);
+   digitalWrite(CleanWaterRinseValve,LOW);
         delay(200);
-    digitalWrite(CleanWaterRinsePump,HIGH);
+    digitalWrite(CleanWaterRinsePump,LOW);
             long int hello=millis();
             while ((millis()-hello)<FreshWaterRinseTime*1000){
                  
                 }   
-          digitalWrite(CleanWaterRinsePump,LOW);
+          digitalWrite(CleanWaterRinsePump,HIGH);
                     delay(100);
-          digitalWrite(CleanWaterRinseValve,LOW);
+          digitalWrite(CleanWaterRinseValve,HIGH);
           delay(2000);
-          digitalWrite(ScanDrain,LOW);
+          digitalWrite(ScanDrain,HIGH);
         //  digitalWrite(FPSCollectValve,LOW);
  Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
                 
@@ -531,7 +540,7 @@ if (FPSOperation){//turn off FPS operation if we want to
            
 ///open all valves and allow any extra water to drain through--especially in FPS sample loop
  //run the pump forward and revers to move water through a couple catch points
- DrainAllValves(3000,3);
+ DrainAllValves(2000,3);
  Serial.print("elapsed time= "); Serial.print(get_unixtime()-unixStartTime);  Serial.println();
          
 		   
@@ -683,7 +692,7 @@ float get_vBatt(){
 
 int get_floatSwitch(){
 int floatSwitch=digitalRead(floatSwitch);	//READ FLOAT SWITCH STATE
-return floatSwitch;    						//RETURN VALUE (1 OR 0)
+return floatSwitch;    						//RETURN VALUE (1 if empty OR 0 if full)
 }//END int get_floatSwitch()
 
 /**************************************************************************************/
@@ -821,29 +830,30 @@ void writeSystemLogFile(float waterDepth, float collect, int numberOfSamples){
 ///A CENTRAL FUNCTION TO CONTROL THE SYSTEM PUMP IT OPENS AND CLOSES VALVES 
 ///I LIKE TO DO IT ALL IN A FUNCTION TO PREVENT OPERATOR MISTAKES, LIKE FAILING TO CLOSE 
 ///A VALVE OR THE LIKE
+///Specify 0 for the valve to NOT activate a valve during pumping....
 void pump(int activePump,long int duration, int valve) {
      if (valve>0){
-        digitalWrite(valve,HIGH);        //open valve to pump water to collection point.
+        digitalWrite(valve,LOW);        //open valve to pump water to collection point.
          delay(200);                     //give it a change to open
          long int cycleTime=millis();    //initialize timer variable
-         digitalWrite(activePump,HIGH);  //turn pump on
+         digitalWrite(activePump,LOW);  //turn pump on
                                          //wait
               while((millis()-cycleTime)/1000<duration){ 
               
               }
               
-         digitalWrite(activePump,LOW);  //turn pump off
+         digitalWrite(activePump,HIGH);  //turn pump off
          delay(300);                    //wait for pressure in lines to balance         
-         digitalWrite(valve,LOW);       //close the valve
+         digitalWrite(valve,HIGH);       //close the valve
   }
-  else{
+  else{//in case someone doesn't want to activate a vale, 
          long int cycleTime=millis();   //initialize timer variable
-         digitalWrite(activePump,HIGH); //turn pump on
+         digitalWrite(activePump,LOW); //turn pump on
          
               while((millis()-cycleTime)/1000<duration){
               
                }
-         digitalWrite(activePump,LOW);  //turn pump off
+         digitalWrite(activePump,HIGH);  //turn pump off
   }
   
 }
@@ -1415,7 +1425,7 @@ void timeStamp(){
   Serial.print("  PurgeTime");  Serial.print(  PurgeTime);  Serial.println();
   Serial.print(" scanCleaningTime");  Serial.print( scanCleaningTime);  Serial.println();
   Serial.print("mantaDelayTime");  Serial.print(mantaDelayTime);  Serial.println();
-  Serial.print("measuremetTime");  Serial.print(mantaDelayTime);  Serial.println();
+  Serial.print("measuremetTime");  Serial.print(measurementTime);  Serial.println();
   Serial.print("FPSTest");  Serial.print(FPSTest);  Serial.println();
   Serial.print("FPSTestSamples");  Serial.print(FPSTestSamples);  Serial.println();
   Serial.print(" FPSCollectTime");  Serial.print(FPSCollectTime);  Serial.println();
@@ -1498,6 +1508,7 @@ void timeStamp(){
 
   int collectFlowProportionalSample(int numberOfSamples){
 		int collect=0;
+if(digitalRead(floatSwitch)==1){
 		unsigned long int counter=millis();
  			if (numberOfSamples<=5){
 					collect=numberOfSamples;
@@ -1525,14 +1536,15 @@ void timeStamp(){
 						} //END while(millis()-counter<FPSEquilibrateTime*1000)
 					  
 ///COLLECT FPS TO COMPOSITE SAMPLE BOTTLE          
-                    digitalWrite(FPSCollectDrainValve,HIGH); 	//OPEN DRAIN VALVE
+                    digitalWrite(FPSCollectDrainValve,LOW); 	//OPEN DRAIN VALVE
 					counter=millis();
 					while(millis() - counter < FPSDrainTime*1000){
 						//WAIT FOR SAMPLE TO DRAIN FROM METERING VESSEL INTO 
 						//COMPOSITE COLLECTION VESSEL
 						} //END while(millis()-counter<FPSEquilibrateTime*1000)
-                     digitalWrite(FPSCollectDrainValve,LOW);  //CLOSE DRAIN VALVE AGAIN
+                     digitalWrite(FPSCollectDrainValve,HIGH);  //CLOSE DRAIN VALVE AGAIN
 			   } //END  for (int i=1; i<=collect; i++)
+}//end if getFloatSwitch
 	return collect;			   
 }//end collectFlowProportionalSample(int numberOfSample) FUNCTION
 
@@ -1540,18 +1552,18 @@ void timeStamp(){
 
  void DrainAllValves (unsigned long int drainTime, int pumpTime){
    Serial.println("draining Valves for safety and security");
- digitalWrite(ScanDrain, HIGH);
- digitalWrite(FPSCollectValve,HIGH);
- digitalWrite(WaterQualityValve,HIGH);
+ digitalWrite(ScanDrain, LOW);
+ digitalWrite(FPSCollectValve,LOW);
+ digitalWrite(WaterQualityValve,LOW);
  pump(systemPump,pumpTime,WaterQualityValve);
  pump(systemPurge,pumpTime+2,WaterQualityValve);
  unsigned long int start=millis();
  while ((millis()-start)<drainTime){
    
  }
- digitalWrite(ScanDrain, LOW);
- digitalWrite(FPSCollectValve,LOW);
- digitalWrite(WaterQualityValve,LOW);
+ digitalWrite(ScanDrain, HIGH);
+ digitalWrite(FPSCollectValve,HIGH);
+ digitalWrite(WaterQualityValve,HIGH);
  }//end drainAllValves
 
 
